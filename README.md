@@ -1,6 +1,24 @@
-# Build an AI Lead Generation Agent with OpenAI Agents SDK and Zenrows
+# Build an AI Lead Generation Agent With OpenAI Agents SDK and Zenrows
 
 An AI agent that reads a bot-protected business directory, extracts every company listed, visits each company's own website for signals, and scores each lead against a plain-language ideal customer profile (ICP). Output is a ranked JSON list with a score and one sentence of reasoning per lead.
+
+Companion code for the Zenrows article [Build an AI Lead Generation Agent With OpenAI Agents SDK and Zenrows](https://www.zenrows.com/blog/ai-lead-generation-agent-openai-agents-sdk-zenrows).
+
+## Contents
+
+- [Features](#features)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Project structure](#project-structure)
+- [How it works](#how-it-works)
+- [Running the project](#running-the-project)
+- [Output](#output)
+- [Technologies](#technologies)
+- [Data sources](#data-sources)
+- [Troubleshooting](#troubleshooting)
+- [Maintenance](#maintenance)
+- [Related article](#related-article)
 
 ## Features
 
@@ -108,40 +126,29 @@ The agent is exposed to two tools rather than four. `discover_leads` wraps jobs 
 
 ## Running the project
 
-### Test the halves in isolation
+Run the two test scripts first, so any failure you see later belongs to the agent loop rather than the tools.
 
-```bash
-python test_fetch_extract.py
-python test_enrich_score.py
-```
-
-Run these before the agent, so any failure you see later belongs to the agent loop rather than the tools.
-
-### Run the agent
-
-```bash
-python agent.py
-```
-
-### Check extraction recall
-
-```bash
-python count_domains.py
-```
-
-### Scale across several directory pages
-
-```bash
-python batch.py
-```
+| Script | What it does | Run it |
+| --- | --- | --- |
+| `test_fetch_extract.py` | Tests the halves in isolation: jobs 1 and 2 | `python test_fetch_extract.py` |
+| `test_enrich_score.py` | Tests the halves in isolation: jobs 3 and 4 | `python test_enrich_score.py` |
+| `agent.py` | Runs the agent | `python agent.py` |
+| `count_domains.py` | Checks extraction recall | `python count_domains.py` |
+| `batch.py` | Scales across several directory pages | `python batch.py` |
 
 ## Output
 
-`test_fetch_extract.py` prints the cached page size, the saving from unwrapping redirects, and the first five extracted leads. It writes `fixtures/directory_page.md` and `fixtures/leads.json`.
+### `test_fetch_extract.py`
 
-`test_enrich_score.py` prints, per lead, the pages enrichment found on the company site, how long the fetch took, the score, and the reasoning.
+Prints the cached page size, the saving from unwrapping redirects, and the first five extracted leads. It writes `fixtures/directory_page.md` and `fixtures/leads.json`.
 
-`agent.py` prints the tool-call trace followed by the ranked JSON array. Each value comes from a tool result rather than the model's own knowledge, so the trace is the first thing to check when a run misbehaves: an agent that qualifies before discovering, or calls discovery twice, has a prompt problem rather than a tool problem.
+### `test_enrich_score.py`
+
+Prints, per lead, the pages enrichment found on the company site, how long the fetch took, the score, and the reasoning.
+
+### `agent.py`
+
+Prints the tool-call trace followed by the ranked JSON array. Each value comes from a tool result rather than the model's own knowledge, so the trace is the first thing to check when a run misbehaves: an agent that qualifies before discovering, or calls discovery twice, has a prompt problem rather than a tool problem.
 
 `agent.py` caps the run at 10 leads. Raise or remove that rule in `INSTRUCTIONS` for a full pass.
 
@@ -160,23 +167,51 @@ The examples target a public IT services directory, a listing of service provide
 
 ## Troubleshooting
 
-**`TypeError: 'FunctionTool' object is not callable`**: `@function_tool` replaces the function with a `FunctionTool` object holding the JSON schema the model reads. Import the private function instead: `_fetch_page`, not `fetch_page`.
+Find the symptom you are seeing, grouped by the part of the pipeline it comes from.
 
-**`additionalProperties should not be set for object types`**: strict tool schemas reject bare `dict` type hints, and `dict[str, X]` as well. Every tool input and output must be a Pydantic model, which is why `EnrichedLead.signals` is a list rather than a dict keyed by signal name.
+### Agent and tool schema errors
 
-**Extraction returns far fewer leads than the page contains**: a single call over a long page fails quietly. `CHUNK_SIZE` in `tools.py` controls the slice size; lower it if recall is still short. Slices overlap by `CHUNK_OVERLAP` so a listing straddling a boundary is not dropped by both sides, and `_key` dedupes what the overlap sees twice. Raise the overlap if your listings are long. Run `count_domains.py` to see what the target should be.
+#### `TypeError: 'FunctionTool' object is not callable`
 
-**Duplicate leads in the output**: the model returns the same domain with and without `www.`, so `_key` normalises before comparing. Check that function first if duplicates survive.
+`@function_tool` replaces the function with a `FunctionTool` object holding the JSON schema the model reads. Import the private function instead: `_fetch_page`, not `fetch_page`.
 
-**Empty website fields**: directory listings wrap outbound links in tracking redirects with the real domain url-encoded inside. `_unwrap_redirects` resolves them with a regex before the model reads the page. A directory using a different redirect format needs that pattern adjusting.
+#### `additionalProperties should not be set for object types`
 
-**Enrichment is very slow**: `_discover_links` reads the homepage navigation and follows only the links that exist. An earlier version guessed paths like `/careers` and `/pricing` and paid a full fetch per miss, which cost 218 seconds on a single lead.
+Strict tool schemas reject bare `dict` type hints, and `dict[str, X]` as well. Every tool input and output must be a Pydantic model, which is why `EnrichedLead.signals` is a list rather than a dict keyed by signal name.
 
-**`context_length_exceeded` when running the agent**: a tool is returning more content than the model can hold. Compose the steps into a single tool so the bulky intermediate stays inside one Python call, as `discover_leads` and `qualify_lead` do.
+#### `context_length_exceeded` when running the agent
 
-**All scores cluster in the same range**: the ICP is asking for something the pages do not state. Headcount is the usual culprit, since no agency site publishes it. Replace it with criteria a homepage or services page states plainly.
+A tool is returning more content than the model can hold. Compose the steps into a single tool so the bulky intermediate stays inside one Python call, as `discover_leads` and `qualify_lead` do.
 
-**A Batch job never finishes**: terminal run states are `completed`, `stopped` and `deleted`. `failed` is a task status, so a loop polling for it will time out on a run that stopped. `_collect_batch` polls for the three terminal states.
+### Extraction
+
+#### Extraction returns far fewer leads than the page contains
+
+A single call over a long page fails quietly. `CHUNK_SIZE` in `tools.py` controls the slice size; lower it if recall is still short. Slices overlap by `CHUNK_OVERLAP` so a listing straddling a boundary is not dropped by both sides, and `_key` dedupes what the overlap sees twice. Raise the overlap if your listings are long. Run `count_domains.py` to see what the target should be.
+
+#### Duplicate leads in the output
+
+The model returns the same domain with and without `www.`, so `_key` normalises before comparing. Check that function first if duplicates survive.
+
+#### Empty website fields
+
+Directory listings wrap outbound links in tracking redirects with the real domain url-encoded inside. `_unwrap_redirects` resolves them with a regex before the model reads the page. A directory using a different redirect format needs that pattern adjusting.
+
+### Enrichment and scoring
+
+#### Enrichment is very slow
+
+`_discover_links` reads the homepage navigation and follows only the links that exist. An earlier version guessed paths like `/careers` and `/pricing` and paid a full fetch per miss, which cost 218 seconds on a single lead.
+
+#### All scores cluster in the same range
+
+The ICP is asking for something the pages do not state. Headcount is the usual culprit, since no agency site publishes it. Replace it with criteria a homepage or services page states plainly.
+
+### Batch
+
+#### A Batch job never finishes
+
+Terminal run states are `completed`, `stopped` and `deleted`. `failed` is a task status, so a loop polling for it will time out on a run that stopped. `_collect_batch` polls for the three terminal states.
 
 ## Maintenance
 
@@ -186,4 +221,4 @@ Dependencies and the Zenrows API surface are re-verified each quarter. File issu
 
 This repository accompanies the Zenrows article:
 
-**[Build an AI Lead Generation Agent with OpenAI Agents SDK and Zenrows](https://www.zenrows.com/blog/ai-lead-generation-agent-openai-agents-sdk-zenrows)**
+**[Build an AI Lead Generation Agent With OpenAI Agents SDK and Zenrows](https://www.zenrows.com/blog/ai-lead-generation-agent-openai-agents-sdk-zenrows)**
