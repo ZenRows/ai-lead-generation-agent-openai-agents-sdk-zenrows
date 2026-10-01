@@ -164,7 +164,7 @@ The examples target a public IT services directory, a listing of service provide
 
 **`additionalProperties should not be set for object types`**: strict tool schemas reject bare `dict` type hints, and `dict[str, X]` as well. Every tool input and output must be a Pydantic model, which is why `EnrichedLead.signals` is a list rather than a dict keyed by signal name.
 
-**Extraction returns far fewer leads than the page contains**: a single call over a long page fails quietly. `CHUNK_SIZE` in `tools.py` controls the slice size; lower it if recall is still short. Run `count_domains.py` to see what the target should be.
+**Extraction returns far fewer leads than the page contains**: a single call over a long page fails quietly. `CHUNK_SIZE` in `tools.py` controls the slice size; lower it if recall is still short. Slices overlap by `CHUNK_OVERLAP` so a listing straddling a boundary is not dropped by both sides, and `_key` dedupes what the overlap sees twice. Raise the overlap if your listings are long. Run `count_domains.py` to see what the target should be.
 
 **Duplicate leads in the output**: the model returns the same domain with and without `www.`, so `_key` normalises before comparing. Check that function first if duplicates survive.
 

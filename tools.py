@@ -82,6 +82,12 @@ REDIRECT_LINK = re.compile(r"https?://[a-z0-9.-]*/redirect\?[^\s\)\"]+")
 # a full directory page is too long for one reliable extraction call
 CHUNK_SIZE = 40000
 
+# slices cut mid-listing, and the extraction prompt is told to skip partial
+# entries, so a listing straddling a boundary is dropped by both slices.
+# overlapping the window carries each boundary listing whole into one of them;
+# _key dedupes the entries the overlap sees twice
+CHUNK_OVERLAP = 2000
+
 
 # strict tool schemas reject bare dicts, so every tool input and output is a model
 class Lead(BaseModel):
@@ -171,7 +177,7 @@ def _extract_leads(content: str, source_url: str) -> list[dict]:
     content = _unwrap_redirects(content)
 
     leads, seen = [], set()
-    for start in range(0, len(content), CHUNK_SIZE):
+    for start in range(0, len(content), CHUNK_SIZE - CHUNK_OVERLAP):
         chunk = content[start:start + CHUNK_SIZE]
         for lead in _extract_chunk(chunk, source_url):
             key = _key(lead)
