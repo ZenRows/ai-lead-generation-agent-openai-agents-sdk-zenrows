@@ -17,7 +17,7 @@ BATCH_ENDPOINT = "https://async.api.zenrows.com/v1/jobs"
 # batch authenticates by header, unlike fetch which takes apikey as a query param
 BATCH_HEADERS = {"X-API-Key": ZENROWS_API_KEY, "Content-Type": "application/json"}
 
-# a job accepts up to 100,000 urls (truth/batch-truth.md, Limits)
+# a job accepts up to 100,000 urls
 MAX_URLS_PER_JOB = 100_000
 
 
@@ -43,7 +43,6 @@ def _collect_batch(job_id: str, max_attempts: int = 60) -> list[tuple[str, str]]
     """wait for the job to reach a terminal state, then pull each task's markdown."""
     # terminal run states are completed, stopped and deleted. "failed" is a task
     # status, not a run status, so polling for it never returns
-    # (truth/batch-truth.md, Domain model)
     for _ in range(max_attempts):
         time.sleep(5)
         status = requests.get(
@@ -66,7 +65,7 @@ def _collect_batch(job_id: str, max_attempts: int = 60) -> list[tuple[str, str]]
         if task["status"] != "successful":
             continue
         # result_url is presigned and valid for 2 hours; re-list the results for a
-        # fresh link rather than storing this one (truth/batch-truth.md, Limits)
+        # fresh link rather than storing this one
         markdown = requests.get(task["result_url"], timeout=60).text
         pages.append((task["url"], markdown))
 

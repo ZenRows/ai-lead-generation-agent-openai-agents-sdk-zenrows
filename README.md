@@ -160,23 +160,23 @@ The examples target a public IT services directory, a listing of service provide
 
 ## Troubleshooting
 
-**`TypeError: 'FunctionTool' object is not callable`** — `@function_tool` replaces the function with a `FunctionTool` object holding the JSON schema the model reads. Import the private function instead: `_fetch_page`, not `fetch_page`.
+**`TypeError: 'FunctionTool' object is not callable`**: `@function_tool` replaces the function with a `FunctionTool` object holding the JSON schema the model reads. Import the private function instead: `_fetch_page`, not `fetch_page`.
 
-**`additionalProperties should not be set for object types`** — strict tool schemas reject bare `dict` type hints, and `dict[str, X]` as well. Every tool input and output must be a Pydantic model, which is why `EnrichedLead.signals` is a list rather than a dict keyed by signal name.
+**`additionalProperties should not be set for object types`**: strict tool schemas reject bare `dict` type hints, and `dict[str, X]` as well. Every tool input and output must be a Pydantic model, which is why `EnrichedLead.signals` is a list rather than a dict keyed by signal name.
 
-**Extraction returns far fewer leads than the page contains** — a single call over a long page fails quietly. `CHUNK_SIZE` in `tools.py` controls the slice size; lower it if recall is still short. Run `count_domains.py` to see what the target should be.
+**Extraction returns far fewer leads than the page contains**: a single call over a long page fails quietly. `CHUNK_SIZE` in `tools.py` controls the slice size; lower it if recall is still short. Run `count_domains.py` to see what the target should be.
 
-**Duplicate leads in the output** — the model returns the same domain with and without `www.`, so `_key` normalises before comparing. Check that function first if duplicates survive.
+**Duplicate leads in the output**: the model returns the same domain with and without `www.`, so `_key` normalises before comparing. Check that function first if duplicates survive.
 
-**Empty website fields** — directory listings wrap outbound links in tracking redirects with the real domain url-encoded inside. `_unwrap_redirects` resolves them with a regex before the model reads the page. A directory using a different redirect format needs that pattern adjusting.
+**Empty website fields**: directory listings wrap outbound links in tracking redirects with the real domain url-encoded inside. `_unwrap_redirects` resolves them with a regex before the model reads the page. A directory using a different redirect format needs that pattern adjusting.
 
-**Enrichment is very slow** — `_discover_links` reads the homepage navigation and follows only the links that exist. An earlier version guessed paths like `/careers` and `/pricing` and paid a full fetch per miss, which cost 218 seconds on a single lead.
+**Enrichment is very slow**: `_discover_links` reads the homepage navigation and follows only the links that exist. An earlier version guessed paths like `/careers` and `/pricing` and paid a full fetch per miss, which cost 218 seconds on a single lead.
 
-**`context_length_exceeded` when running the agent** — a tool is returning more content than the model can hold. Compose the steps into a single tool so the bulky intermediate stays inside one Python call, as `discover_leads` and `qualify_lead` do.
+**`context_length_exceeded` when running the agent**: a tool is returning more content than the model can hold. Compose the steps into a single tool so the bulky intermediate stays inside one Python call, as `discover_leads` and `qualify_lead` do.
 
-**All scores cluster in the same range** — the ICP is asking for something the pages do not state. Headcount is the usual culprit, since no agency site publishes it. Replace it with criteria a homepage or services page states plainly.
+**All scores cluster in the same range**: the ICP is asking for something the pages do not state. Headcount is the usual culprit, since no agency site publishes it. Replace it with criteria a homepage or services page states plainly.
 
-**A Batch job never finishes** — terminal run states are `completed`, `stopped` and `deleted`. `failed` is a task status, so a loop polling for it will time out on a run that stopped. `_collect_batch` polls for the three terminal states.
+**A Batch job never finishes**: terminal run states are `completed`, `stopped` and `deleted`. `failed` is a task status, so a loop polling for it will time out on a run that stopped. `_collect_batch` polls for the three terminal states.
 
 ## Maintenance
 
